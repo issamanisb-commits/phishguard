@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PhishGuard — Phishing Email Detector</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface2: #21262d;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #238636;
+      --accent-hover: #2ea043;
+      --danger: #da3633;
+      --danger-bg: #1f1117;
+      --danger-border: #6e2b2b;
+      --warning: #e3b341;
+      --warning-bg: #161209;
+      --success-bg: #0d1f0f;
+      --success-border: #2b6b30;
+      --mono: 'Courier New', monospace;
+      --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; padding: 2rem 1rem; }
+    .container { max-width: 760px; margin: 0 auto; }
+
+    header { margin-bottom: 2.5rem; }
+    .badge { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; padding: 4px 10px; border-radius: 20px; background: #1c2d1e; color: #3fb950; border: 1px solid #2b6b30; margin-bottom: 1rem; }
+    h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 0.5rem; }
+    h1 span { color: #3fb950; }
+    .subtitle { color: var(--muted); font-size: 1rem; line-height: 1.6; }
+
+    .section-label { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.75rem; }
+
+    .samples { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1.5rem; }
+    .sample-btn { font-size: 12px; padding: 5px 14px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface2); color: var(--muted); cursor: pointer; font-family: var(--sans); transition: all 0.15s; }
+    .sample-btn:hover { border-color: #3fb950; color: #3fb950; }
+
+    .email-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 1rem; }
+    .email-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: grid; gap: 6px; }
+    .email-field { display: flex; gap: 10px; font-size: 13px; }
+    .field-label { color: var(--muted); min-width: 56px; font-family: var(--mono); }
+    .field-val { color: var(--text); font-family: var(--mono); outline: none; flex: 1; background: transparent; border: none; }
+    .field-val:focus { color: #3fb950; }
+    .email-body { padding: 16px; font-size: 14px; color: var(--text); line-height: 1.7; font-family: var(--sans); white-space: pre-wrap; min-height: 120px; outline: none; }
+    .email-body:empty:before { content: attr(data-placeholder); color: var(--muted); }
+
+    .scan-btn { display: flex; align-items: center; gap: 8px; padding: 11px 24px; border-radius: 8px; border: none; background: var(--accent); color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; font-family: var(--sans); transition: all 0.15s; margin-bottom: 1.5rem; }
+    .scan-btn:hover { background: var(--accent-hover); }
+    .scan-btn:active { transform: scale(0.98); }
+    .scan-btn.loading { opacity: 0.6; pointer-events: none; }
+
+    .result { display: none; }
+    .result.visible { display: block; }
+
+    .verdict { display: flex; align-items: flex-start; gap: 14px; padding: 16px 20px; border-radius: 10px; margin-bottom: 1.25rem; border: 1px solid; }
+    .verdict.phish { background: var(--danger-bg); border-color: var(--danger-border); }
+    .verdict.safe { background: var(--success-bg); border-color: var(--success-border); }
+    .verdict-emoji { font-size: 24px; }
+    .verdict-label { font-size: 17px; font-weight: 700; margin-bottom: 3px; }
+    .verdict.phish .verdict-label { color: #ff7b72; }
+    .verdict.safe .verdict-label { color: #3fb950; }
+    .verdict-sub { font-size: 13px; color: var(--muted); }
+
+    .scores { margin-bottom: 1.5rem; }
+    .score-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+    .score-name { font-size: 13px; color: var(--muted); min-width: 140px; font-family: var(--mono); }
+    .bar-wrap { flex: 1; height: 5px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+    .bar { height: 100%; border-radius: 3px; transition: width 0.7s ease; }
+    .bar.high { background: var(--danger); }
+    .bar.med { background: var(--warning); }
+    .bar.low { background: #3fb950; }
+    .score-pct { font-size: 12px; font-family: var(--mono); color: var(--muted); min-width: 36px; text-align: right; }
+
+    .flags-title { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.75rem; }
+    .flag { display: flex; gap: 12px; padding: 12px 14px; border-radius: 8px; margin-bottom: 8px; border: 1px solid var(--border); background: var(--surface); }
+    .flag-icon { font-size: 18px; flex-shrink: 0; }
+    .flag.red .flag-icon { color: #ff7b72; }
+    .flag.amber .flag-icon { color: var(--warning); }
+    .flag.green .flag-icon { color: #3fb950; }
+    .flag-name { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 3px; }
+    .flag-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+    .tip { margin-top: 1.25rem; padding: 14px 18px; border-left: 3px solid #3fb950; background: var(--success-bg); border-radius: 0 8px 8px 0; font-size: 13px; color: #7ee787; line-height: 1.7; }
+    .tip.danger-tip { border-left-color: var(--danger); background: var(--danger-bg); color: #ff7b72; }
+
+    .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #fff4; border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    footer { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); text-align: center; }
+    footer a { color: #3fb950; text-decoration: none; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="badge">🛡 Cybersecurity Project</div>
+    <h1>Phish<span>Guard</span></h1>
+    <p class="subtitle">An interactive social engineering detection tool that analyzes emails for phishing patterns, domain spoofing, urgency tactics, and psychological manipulation techniques.</p>
+  </header>
+
+  <p class="section-label">Load a sample scenario</p>
+  <div class="samples">
+    <button class="sample-btn" onclick="loadSample('bank')">🏦 Bank alert</button>
+    <button class="sample-btn" onclick="loadSample('prize')">🎰 Prize scam</button>
+    <button class="sample-btn" onclick="loadSample('ceo')">👔 CEO fraud</button>
+    <button class="sample-btn" onclick="loadSample('legit')">✅ Legitimate email</button>
+  </div>
+
+  <div class="email-card">
+    <div class="email-header">
+      <div class="email-field">
+        <span class="field-label">From:</span>
+        <span class="field-val" id="field-from" contenteditable="true">security@commercialbank-alerts.net</span>
+      </div>
+      <div class="email-field">
+        <span class="field-label">Subject:</span>
+        <span class="field-val" id="field-subject" contenteditable="true">⚠️ URGENT: Your account has been suspended</span>
+      </div>
+    </div>
+    <div class="email-body" id="email-body" contenteditable="true" data-placeholder="Paste or type the email body here...">Dear Valued Customer,
+
+We have detected unusual activity on your account. Your account has been TEMPORARILY SUSPENDED for security reasons.
+
+You must verify your identity immediately to restore access and avoid permanent closure.
+
+Click here to verify now: http://commercialbank-secure-login.xyz/verify
+
+This link expires in 24 HOURS. Act now or lose access forever.
+
+Do not share this email with anyone.
+
+— Security Team
+Commercial Bank</div>
+  </div>
+
+  <button class="scan-btn" id="scan-btn" onclick="runScan()">
+    <span id="btn-icon">🔍</span>
+    <span id="btn-text">Analyze for phishing threats</span>
+  </button>
+
+  <div class="result" id="result">
+    <div class="verdict" id="verdict">
+      <span class="verdict-emoji" id="verdict-emoji"></span>
+      <div>
+        <div class="verdict-label" id="verdict-label"></div>
+        <div class="verdict-sub" id="verdict-sub"></div>
+      </div>
+    </div>
+
+    <div class="scores">
+      <p class="flags-title">Threat indicators</p>
+      <div class="score-row"><span class="score-name">urgency_tactics</span><div class="bar-wrap"><div class="bar" id="bar-urgency" style="width:0%"></div></div><span class="score-pct" id="pct-urgency">0%</span></div>
+      <div class="score-row"><span class="score-name">domain_spoofing</span><div class="bar-wrap"><div class="bar" id="bar-domain" style="width:0%"></div></div><span class="score-pct" id="pct-domain">0%</span></div>
+      <div class="score-row"><span class="score-name">credential_harvest</span><div class="bar-wrap"><div class="bar" id="bar-cred" style="width:0%"></div></div><span class="score-pct" id="pct-cred">0%</span></div>
+      <div class="score-row"><span class="score-name">fear_tactics</span><div class="bar-wrap"><div class="bar" id="bar-fear" style="width:0%"></div></div><span class="score-pct" id="pct-fear">0%</span></div>
+    </div>
+
+    <p class="flags-title">Detected red flags</p>
+    <div id="flags"></div>
+    <div class="tip" id="tip"></div>
+  </div>
+</div>
+
+<footer>
+  <p>PhishGuard — Built to raise cybersecurity awareness · <a href="https://github.com">View on GitHub</a></p>
+</footer>
+
+<script>
+const samples = {
+  bank: { from: 'security@commercialbank-alerts.net', subject: '⚠️ URGENT: Your account has been suspended', body: `Dear Valued Customer,\n\nWe have detected unusual activity on your account. Your account has been TEMPORARILY SUSPENDED for security reasons.\n\nYou must verify your identity immediately to restore access and avoid permanent closure.\n\nClick here to verify now: http://commercialbank-secure-login.xyz/verify\n\nThis link expires in 24 HOURS. Act now or lose access forever.\n\nDo not share this email with anyone.\n\n— Security Team\nCommercial Bank` },
+  prize: { from: 'winner-notification@intl-lottery-foundation.com', subject: 'Congratulations! You have won $850,000 USD', body: `CONGRATULATIONS WINNER!!!\n\nYour email address was selected in our INTERNATIONAL LOTTERY DRAW. You have won $850,000 USD!\n\nTo claim your prize, send us:\n- Full name and home address\n- Copy of your ID\n- Processing fee of $150\n\nReply IMMEDIATELY. Offer expires in 48 hours.\n\nDr. James Wilson\nHead of Claims` },
+  ceo: { from: 'ceo.daniel@company-corp.net', subject: 'Urgent wire transfer needed - confidential', body: `Hi,\n\nI need you to process an urgent wire transfer of $12,500. I am in a meeting — handle this via email only.\n\nDo NOT discuss this with anyone in the office. This is confidential.\n\nAccount: 4839201847 | Bank: First National | Ref: Project Delta\n\nConfirm once done.\n\nDaniel, CEO` },
+  legit: { from: 'noreply@github.com', subject: 'Your pull request has been merged', body: `Hi,\n\nYour pull request "Fix login validation bug" (#247) was merged into main by @sarah-dev.\n\nView changes: https://github.com/yourrepo/pull/247\n\nThank you for contributing!\n\nThe GitHub Team\n\nYou're receiving this because you submitted a pull request.` }
+};
+
+function loadSample(k) {
+  const s = samples[k];
+  document.getElementById('field-from').innerText = s.from;
+  document.getElementById('field-subject').innerText = s.subject;
+  document.getElementById('email-body').innerText = s.body;
+  document.getElementById('result').classList.remove('visible');
+}
+
+function analyze(from, subject, body) {
+  const full = (from + ' ' + subject + ' ' + body).toLowerCase();
+  let scores = { urgency: 0, domain: 0, cred: 0, fear: 0 };
+  let flags = [];
+
+  const urgWords = ['urgent', 'immediately', 'expires', 'act now', '24 hours', '48 hours', 'asap', 'time-sensitive', 'right now'];
+  const uc = urgWords.filter(w => full.includes(w)).length;
+  scores.urgency = Math.min(100, uc * 25);
+  if (uc >= 2) flags.push({ c: 'red', i: '⏰', n: 'Artificial urgency', d: 'Phrases like "act now", "expires in 24 hours" are pressure tactics designed to stop you thinking critically before clicking.' });
+
+  const suspDomain = [/-alerts\./, /-secure\./, /\.xyz/, /[a-z]bank[a-z]/].some(p => p.test(from));
+  if (suspDomain) { scores.domain = 90; flags.push({ c: 'red', i: '🌐', n: 'Spoofed sender domain', d: `"${from}" mimics a trusted brand but uses a fake domain. Real banks and companies only email from their official, verified domains.` }); }
+
+  const credWords = ['verify', 'click here', 'confirm your', 'password', 'account number', 'send us', 'your id', 'processing fee', 'wire transfer'];
+  const cc = credWords.filter(w => full.includes(w)).length;
+  scores.cred = Math.min(100, cc * 28);
+  if (cc >= 1) flags.push({ c: 'red', i: '🔑', n: 'Credential or money harvesting', d: 'Asking you to click a link, send personal details, or transfer money is the core goal of phishing attacks.' });
+
+  const fearWords = ['suspended', 'closed', 'terminated', 'legal action', 'lose access', 'permanent', 'confidential', 'do not share', 'do not tell'];
+  const fc = fearWords.filter(w => full.includes(w)).length;
+  scores.fear = Math.min(100, fc * 35);
+  if (fc >= 1) flags.push({ c: 'amber', i: '😰', n: 'Fear and secrecy tactics', d: 'Threats of account closure, legal action, or secrecy instructions trigger panic and bypass rational thinking — a classic social engineering technique.' });
+
+  const links = full.match(/http[s]?:\/\/[^\s]+/g) || [];
+  const badLink = links.some(l => l.includes('.xyz') || l.includes('-secure') || l.includes('-login') || l.includes('verify'));
+  if (badLink) flags.push({ c: 'red', i: '🔗', n: 'Suspicious URL detected', d: `Links like "${links[0]}" point to fake websites built to steal your credentials. Always hover over links to see the real destination.` });
+
+  const capsCount = (body.match(/\b[A-Z]{3,}\b/g) || []).length;
+  if (capsCount >= 3) flags.push({ c: 'amber', i: '📢', n: 'Excessive capitalization', d: 'ALL CAPS words like URGENT and SUSPENDED are manipulation tactics to trigger an emotional response.' });
+
+  const isLegit = from.match(/@(github\.com|google\.com|microsoft\.com|apple\.com|amazon\.com)$/) && !flags.some(f => f.c === 'red');
+  if (isLegit) flags.push({ c: 'green', i: '✅', n: 'Sender domain appears legitimate', d: 'The email comes from a verified, well-known domain and does not request sensitive information or action.' });
+
+  const total = Math.round(scores.urgency * 0.25 + scores.domain * 0.35 + scores.cred * 0.25 + scores.fear * 0.15);
+  return { scores, flags, total, isPhish: total > 50 };
+}
+
+function setBar(id, pctId, val) {
+  const cls = val > 60 ? 'high' : val > 35 ? 'med' : 'low';
+  setTimeout(() => {
+    const b = document.getElementById(id);
+    b.style.width = val + '%';
+    b.className = 'bar ' + cls;
+    document.getElementById(pctId).innerText = val + '%';
+  }, 150);
+}
+
+function runScan() {
+  const from = document.getElementById('field-from').innerText.trim();
+  const subject = document.getElementById('field-subject').innerText.trim();
+  const body = document.getElementById('email-body').innerText.trim();
+  if (!from && !body) return;
+
+  document.getElementById('result').classList.remove('visible');
+  const btn = document.getElementById('scan-btn');
+  btn.classList.add('loading');
+  document.getElementById('btn-icon').innerHTML = '<span class="spinner"></span>';
+  document.getElementById('btn-text').innerText = 'Analyzing...';
+
+  setTimeout(() => {
+    const r = analyze(from, subject, body);
+    btn.classList.remove('loading');
+    document.getElementById('btn-icon').innerText = '🔍';
+    document.getElementById('btn-text').innerText = 'Analyze for phishing threats';
+
+    const v = document.getElementById('verdict');
+    v.className = 'verdict ' + (r.isPhish ? 'phish' : 'safe');
+    document.getElementById('verdict-emoji').innerText = r.isPhish ? '⚠️' : '✅';
+    document.getElementById('verdict-label').innerText = r.isPhish ? 'Phishing attack detected' : 'Email appears legitimate';
+    document.getElementById('verdict-sub').innerText = `Threat score: ${r.total}% — ${r.isPhish ? 'High risk. Do not interact with this email.' : 'No major red flags found.'}`;
+
+    setBar('bar-urgency', 'pct-urgency', r.scores.urgency);
+    setBar('bar-domain', 'pct-domain', r.scores.domain);
+    setBar('bar-cred', 'pct-cred', r.scores.cred);
+    setBar('bar-fear', 'pct-fear', r.scores.fear);
+
+    const fc = document.getElementById('flags');
+    fc.innerHTML = r.flags.length === 0
+      ? '<div class="flag green"><span class="flag-icon">✅</span><div><div class="flag-name">No threats found</div><div class="flag-desc">This email passed all major detection checks.</div></div></div>'
+      : r.flags.map(f => `<div class="flag ${f.c}"><span class="flag-icon">${f.i}</span><div><div class="flag-name">${f.n}</div><div class="flag-desc">${f.d}</div></div></div>`).join('');
+
+    const tip = document.getElementById('tip');
+    tip.className = r.isPhish ? 'tip danger-tip' : 'tip';
+    tip.innerText = r.isPhish
+      ? '🛡️ What to do: Do NOT click any links or reply. Report to your IT/security team immediately. Contact the organization using their official website — never use contact details from the suspicious email.'
+      : '✅ This email looks legitimate, but stay vigilant. Never share passwords or sensitive data over email, regardless of how trustworthy the sender appears.';
+
+    document.getElementById('result').classList.add('visible');
+  }, 1800);
+}
+</script>
+</body>
+</html>
