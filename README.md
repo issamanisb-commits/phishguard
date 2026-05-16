@@ -35,7 +35,7 @@ PhishGuard makes threat education interactive and accessible. Instead of reading
 No installation or server needed. Just open the file:
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/phishguard.git
+git clone https://github.com/issamanisb-commits/phishguard.git
 cd phishguard
 open index.html   # or double-click it in your file explorer
 ```
